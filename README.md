@@ -8,10 +8,9 @@ pipenv install --dev
 
 # from Pipfile.lock
 pipenv install --ignore-pipfile
-
-```python
-### simple example
 ```
+### simple example
+```python
 import json
 from functools import partial
 import numpy as np
