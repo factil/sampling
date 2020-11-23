@@ -21,5 +21,6 @@ if __name__ == '__main__':
     importance_sampler = ImportanceSampler(0.5, preds, probs, oracle)
     passive_sampler.sample_distinct(5000)
     importance_sampler.sample_distinct(5000)
+    # its likely that f score from passive sampler is all NAN, consider increase number of samples
     print(passive_sampler.f_score_history())
     print(importance_sampler.f_score_history())
