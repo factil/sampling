@@ -16,7 +16,9 @@ class BaseSampler(ABC):
         if not is_between_zero_and_one(alpha):
             raise ValueError("alpha must be between 0 and 1")
         self.alpha = alpha
+
         self.oracle = oracle
+
         if not is_between_zero_and_one(scores):
             raise ValueError("scores must be between 0 and 1")
         self.scores = scores
@@ -31,7 +33,7 @@ class BaseSampler(ABC):
         self.f_scores = np.repeat(np.nan, self.max_iter)
 
     @abstractmethod
-    def select_single_item(self, sample_with_replacement: bool, **kwargs):
+    def select_next_item(self, sample_with_replacement: bool, **kwargs):
         pass
 
     @abstractmethod
@@ -77,7 +79,7 @@ class BaseSampler(ABC):
         sample_with_replacement : true
         """
         for _ in range(n_to_sample):
-            loc, weight, extra_info = self.select_single_item(sample_with_replacement, **kwargs)
+            loc, weight, extra_info = self.select_next_item(sample_with_replacement, **kwargs)
             # Query label
             ell = self.query_label(loc)
             # Get predictions
