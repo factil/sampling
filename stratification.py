@@ -181,7 +181,7 @@ class Strata:
         loc = self.allocations_[stratum_idx][stratum_loc]
         return loc
 
-    def sample(self, replace=True):
+    def sample(self, replace=True, pmf=None):
         """Sample an item from the strata
 
         Parameters
@@ -201,7 +201,11 @@ class Strata:
         stratum_idx : int
             the stratum index that was sampled from
         """
-        stratum_idx = self.sample_stratum(replace=replace)
+        kwargs = {}
+        if pmf:
+            kwargs.update(pmf=pmf)
+
+        stratum_idx = self.sample_stratum(replace=replace, **kwargs)
         loc = self.sample_in_stratum(stratum_idx, replace=replace)
         return loc, stratum_idx
 
