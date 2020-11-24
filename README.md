@@ -1,6 +1,12 @@
-# Sampling
-## used to estimate F score of a classifier with efficient labelling
-### installation
+# Efficient evaluation of classifiers
+this repo includes several efficient methods to estimate the f score of
+a given classifier through labelling
+1. PassiveSampler
+2. ImportanceSampler
+3. DruckSampler
+4. OasisSampler
+
+### Quickstart
 ```
 pip install pipenv
 # from Pipfile
@@ -9,7 +15,7 @@ pipenv install --dev
 # from Pipfile.lock
 pipenv install --ignore-pipfile
 ```
-### simple example
+### Client code
 ```python
 import json
 from functools import partial
@@ -28,10 +34,13 @@ if __name__ == '__main__':
     labels = np.array(data['labels'])
     scores = np.array(data['scores'])
     preds = np.array(data['preds'])
+    
     probs = scores2probs(scores)
     oracle = partial(oracle, labels)
+    
     passive_sampler = PassiveSampler(0.5, preds, probs, oracle)
     importance_sampler = ImportanceSampler(0.5, preds, probs, oracle)
+    
     passive_sampler.sample_distinct(5000)
     importance_sampler.sample_distinct(5000)
     print(passive_sampler.f_score_history())
