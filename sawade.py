@@ -1,9 +1,11 @@
+from typing import Callable
 import numpy as np
 
-from refactored.passive import PassiveSampler
+from sampler_abc import BaseSampler
+from utility import compute_f_score
 
 
-class ImportanceSampler(PassiveSampler):
+class ImportanceSampler(BaseSampler):
     """Importance sampling for estimation of the weighted F-measure
 
     Estimates the quantity::
@@ -104,40 +106,39 @@ class ImportanceSampler(PassiveSampler):
        of F-Measures,” in Advances in Neural Information Processing Systems 23,
        2010, pp. 2083–2091
     """
-    def __init__(self, alpha, predictions, scores, oracle,
+    def __init__(self, alpha: float, predictions, scores, oracle: Callable,
                  epsilon: float = 1e-3, max_iter=None):
-        super(ImportanceSampler, self).__init__(alpha, predictions, scores, oracle,
-                                          max_iter=max_iter)
-        self.scores = scores
+        super().__init__(alpha, predictions, scores, oracle, max_iter=max_iter)
         self.epsilon = epsilon
+        self.TP, self.FP, self.FN = [0] * 3
 
         # Need to transform scores to the [0,1] interval (to use as proxy for
         # probabilities)
         # Average the probabilities over opt_class
-        self._F_guess = self._calc_F_guess(self.alpha,
+        self._F_guess = self._calc_f_guess(self.alpha,
                                            self.predictions,
                                            self.scores)
 
         self._inst_pmf = np.empty(self.n_items, dtype=float)
         self._initialise_pmf()
 
-    def _sample_item(self, sample_with_replacement:bool):
+    def select_next_item(self, sample_with_replacement: bool, **kwargs):
         """Sample an item from the pool according to the instrumental
         distribution
         """
         loc = np.random.choice(self.n_items, p=self._inst_pmf)
         weight = (1/self.n_items)/self._inst_pmf[loc]
-        return loc, weight
+        return loc, weight, None
 
-    def _calc_F_guess(self, alpha, predictions, probabilities):
+    def _calc_f_guess(self, alpha, predictions, probabilities):
         """Calculate an estimate of the F-measure based on the scores"""
         num = np.sum(predictions * probabilities)
         den = np.sum((1 - alpha) * probabilities + alpha * predictions)
-        F_guess = num / den
+        f_guess = num / den
         # Ensure guess is not undefined
-        if np.isnan(F_guess):
-            F_guess = 0.5
-        return F_guess
+        if np.isnan(f_guess):
+            f_guess = 0.5
+        return f_guess
 
     def _initialise_pmf(self):
         """Calculate the epsilon-greedy instrumental distribution"""
@@ -151,8 +152,8 @@ class ImportanceSampler(PassiveSampler):
         F = self._F_guess
 
         # Calculate optimal instrumental pmf
-        sqrt_arg = preds * (alpha**2 * F**2 * p0 + (1 - F)**2 * p1) + \
-                          (1 - preds) * (1 - alpha)**2 * F**2 * p1
+        sqrt_arg = preds * (alpha**2 * F**2 * p0 + (1 - F)**2 * p1) +\
+                   (1 - preds) * (1 - alpha)**2 * F**2 * p1
 
         self._inst_pmf = np.sqrt(sqrt_arg)
         # Normalize
@@ -160,3 +161,10 @@ class ImportanceSampler(PassiveSampler):
         # Epsilon-greedy: (1 - epsilon) q + epsilon * p
         self._inst_pmf *= (1 - epsilon)
         self._inst_pmf += epsilon * 1 / n_items
+
+    def update_estimate_and_sampler(self, ell, ell_hat, weight, **kwargs):
+        """Update the estimate after querying the label for an item"""
+        self.TP += ell_hat * ell * weight
+        self.FP += ell_hat * (1 - ell) * weight
+        self.FN += (1 - ell_hat) * ell * weight
+        self.f_scores[self.idx] = compute_f_score(self.alpha, self.TP, self.FP, self.FN)

@@ -1,9 +1,10 @@
 import numpy as np
-from refactored.stratification import Strata, stratify_by_cum_sqrt_f_method
-from refactored.passive import PassiveSampler
+from stratification import Strata, stratify_by_cum_sqrt_f_method
+from sampler_abc import BaseSampler
+from utility import compute_f_score
 
 
-class DruckSampler(PassiveSampler):
+class DruckSampler(BaseSampler):
     """Stratified sampling for estimation of the weighted F-measure
 
     Estimates the quantity::
@@ -108,80 +109,45 @@ class DruckSampler(PassiveSampler):
         self.strata = Strata(stratify_by_cum_sqrt_f_method(scores))
 
         #: Number of TP, PP, P sampled per stratum
-        self._TP_st = np.zeros(self.strata.n_strata_)
-        self._PP_st = np.zeros(self.strata.n_strata_)
-        self._P_st = np.zeros(self.strata.n_strata_)
+        self.tp_strata = np.zeros(self.strata.n_strata)
+        self.pp_strata = np.zeros(self.strata.n_strata)
+        self.pp_st = np.zeros(self.strata.n_strata)
 
+        # fill each of strata with 2 items as it is described in the paper
         for i in range(2):
-            for j in range(self.strata.n_strata_):
+            for j in range(self.strata.n_strata):
                 self.sample(1, stratum_idx=j)
 
-    def sample(self, n_to_sample: int, sample_with_replacement=True, **kwargs):
-        """Sample a sequence of items from the pool (with replacement)
-
-        Parameters
-        ----------
-        n_to_sample : positive int
-            number of items to sample
-        """
-        for _ in range(n_to_sample):
-            loc, weight, stratum_idx = self._sample_item(sample_with_replacement, **kwargs)
-            # Query label
-            ell = self._query_label(loc)
-            # Get predictions
-            ell_hat = self.predictions[loc]
-
-            if self.debug:
-                print("Sampled label {} for item {}.".format(ell, loc))
-
-            # Update
-            self._update_estimate_and_sampler(ell, ell_hat, weight, stratum_idx=stratum_idx)
-
-            self.idx += 1
-
-    def _sample_item(self, sample_with_replacement: bool, **kwargs):
-        """Sample an item from the strata"""
-
+    def select_next_item(self, sample_with_replacement: bool, **kwargs):
         stratum_idx = kwargs.get('stratum_idx')
         if stratum_idx is not None:
             #: Sample in given stratum
-            loc = self.strata._sample_in_stratum(stratum_idx, replace=sample_with_replacement)
+            loc = self.strata.sample_in_stratum(stratum_idx, replace=sample_with_replacement)
         else:
             loc, stratum_idx = self.strata.sample(replace=sample_with_replacement)
 
-        return loc, 1, stratum_idx
+        return loc, 1, {'stratum_idx': stratum_idx}
 
-    def _calc_estimate(self, TP_rates, PP_rates, P_rates):
-        """
-        """
-        #: Easy vars
-        sizes = self.strata.sizes_
-        alpha = self.alpha
-        #: Estimate number of TP, PP, P
-        TP = np.inner(TP_rates, sizes)
-        PP = np.inner(PP_rates, sizes)
-        P = np.inner(P_rates, sizes)
-
-        FN = TP - PP
-        FP = P - PP
-
-        """Calculate the weighted F-measure"""
-        num = TP
-        den = self.alpha * (TP + FP) + (1 - self.alpha) * (TP + FN)
-        with np.errstate(divide='ignore', invalid='ignore'):
-            return num / den
-
-    def _update_estimate_and_sampler(self, ell, ell_hat, weight, **kwargs):
+    def update_estimate_and_sampler(self, ell, ell_hat, weight, **kwargs):
         """Update the estimate after querying the label for an item"""
 
         stratum_idx = kwargs['stratum_idx']
-        self._TP_st[stratum_idx] += ell_hat * ell * weight
-        self._PP_st[stratum_idx] += ell_hat * weight
-        self._P_st[stratum_idx] += ell * weight
+        self.tp_strata[stratum_idx] += ell_hat * ell * weight
+        self.pp_strata[stratum_idx] += ell_hat * weight
+        self.pp_st[stratum_idx] += ell * weight
 
-        P_rates = self._P_st / self.strata._n_sampled
-        TP_rates = self._TP_st / self.strata._n_sampled
-        PP_rates = self._PP_st / self.strata._n_sampled
+        p_rates = self.pp_st / self.strata.n_sampled_in_each_strata
+        tp_rates = self.tp_strata / self.strata.n_sampled_in_each_strata
+        pp_rates = self.pp_strata / self.strata.n_sampled_in_each_strata
+
+        sizes = self.strata.sizes
+        #: Estimate number of TP, PP, P
+        tp = np.inner(tp_rates, sizes)
+        pp = np.inner(pp_rates, sizes)
+        p = np.inner(p_rates, sizes)
+        fn = tp - pp
+        fp = p - pp
+        f_score = compute_f_score(self.alpha, tp, fp, fn)
 
         #: Update model estimate (with prior)
-        self.stored_estimates[self.idx] = self._calc_estimate(TP_rates, PP_rates, P_rates)
+        self.f_scores[self.idx] = f_score
