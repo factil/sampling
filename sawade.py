@@ -1,5 +1,4 @@
-from abc import ABC
-
+from typing import Callable
 import numpy as np
 
 from sampler_abc import BaseSampler
@@ -107,7 +106,7 @@ class ImportanceSampler(BaseSampler):
        of F-Measures,” in Advances in Neural Information Processing Systems 23,
        2010, pp. 2083–2091
     """
-    def __init__(self, alpha, predictions, scores, oracle,
+    def __init__(self, alpha: float, predictions, scores, oracle: Callable,
                  epsilon: float = 1e-3, max_iter=None):
         super().__init__(alpha, predictions, scores, oracle, max_iter=max_iter)
         self.epsilon = epsilon
