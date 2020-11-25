@@ -137,7 +137,7 @@ class Strata:
         int
             a randomly selected stratum index
         """
-        pmf = pmf or self.weights
+        pmf = pmf if pmf is not None else self.weights
         if replace:
             # Find strata which have been fully sampled (i.e. are now empty)
             return np.random.choice(self.indices_, p=pmf)
@@ -202,7 +202,7 @@ class Strata:
             the stratum index that was sampled from
         """
         kwargs = {}
-        if pmf:
+        if pmf is not None:
             kwargs.update(pmf=pmf)
 
         stratum_idx = self.sample_stratum(replace=replace, **kwargs)
