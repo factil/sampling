@@ -6,6 +6,8 @@ name = "pypi"
 [packages]
 numpy = "*"
 scipy = "*"
+oasis = "*"
+tqdm = "*"
 
 [dev-packages]
 
