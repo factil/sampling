@@ -1,11 +1,11 @@
 import json
 from functools import partial
 import numpy as np
+import tqdm
+from oasis import OASISSampler
+
 from utility import scores2probs
-from passive import PassiveSampler
-from sawade import ImportanceSampler
-from druck import DruckSampler
-from _oasis import OASISSampler
+
 
 
 def oracle(labels, idx):
@@ -22,8 +22,12 @@ if __name__ == '__main__':
 
     # initialize all samplers
     oracle = partial(oracle, labels)
-    for cls in [PassiveSampler, ImportanceSampler, DruckSampler, OASISSampler]:
-        sampler = cls(0.5, preds, probs, oracle)
+    n_runs = 50
+    f_scores = np.empty(n_runs)
+    for i in tqdm.tqdm(range(n_runs)):
+        sampler = OASISSampler(0.5, preds, probs, oracle)
         sampler.sample_distinct(5000)
-        print(f"{cls.__name__} f score history:")
-        print(sampler.f_score_history())
+        f_scores[i] = sampler.estimate_[-1]
+    print("estimated f score")
+    print(f"{np.mean(f_scores)=}")
+    print(f"{np.std(f_scores)=}")

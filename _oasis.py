@@ -28,13 +28,13 @@ class BetaBernoulliModel:
 
     Attributes
     ----------
-    alpha_ : numpy.ndarray, shape=(n_strata,)
+    alpha : numpy.ndarray, shape=(n_strata,)
         posterior value of alpha (excluding prior)
 
-    beta_ : numpy.ndarray, shape=(n_strata,)
+    beta : numpy.ndarray, shape=(n_strata,)
         posterior value of beta (excluding prior)
 
-    theta_ : numpy.ndarray, shape=(n_strata,)
+    theta : numpy.ndarray, shape=(n_strata,)
         posterior estimate of theta
 
     var_theta_ : numpy.ndarray, shape=(n_strata,)
@@ -53,21 +53,21 @@ class BetaBernoulliModel:
         self.store_variance = store_variance
         self.decaying_prior = decaying_prior
         self.store_wp = store_wp
-        self._size = len(alpha_0)
+        self.size = len(alpha_0)
 
         # Number of "1" and "0" label resp. (excluding prior)
-        self.alpha_ = np.zeros(self._size, dtype=int)
-        self.beta_ = np.zeros(self._size, dtype=int)
+        self.alpha = np.zeros(self.size, dtype=int)
+        self.beta = np.zeros(self.size, dtype=int)
 
         # Estimate of fraction of positive labels in each stratum
-        self.theta_ = np.empty(self._size, dtype=float)
+        self.theta = np.empty(self.size, dtype=float)
         # Estimate of variance in theta
         # if self.store_variance:
         #     self.var_theta_ = np.empty(self._size, dtype=float)
 
         # Estimates without incorporating prior (wp = weak prior)
         if self.store_wp:
-            self.theta_wp_ = np.empty(self._size, dtype=float)
+            self.theta_wp_ = np.empty(self.size, dtype=float)
             self._wp_weight = 1e-20
 
         # Initialise estimates
@@ -76,21 +76,21 @@ class BetaBernoulliModel:
     def _update_theta(self):
         """Calculate an estimate of theta"""
         if self.decaying_prior:
-            n_sampled = np.clip(self.alpha_ + self.beta_, 1, np.inf)
+            n_sampled = np.clip(self.alpha + self.beta, 1, np.inf)
             prior_weight = 1/n_sampled
-            alpha = self.alpha_ + prior_weight * self.alpha_0
-            beta = self.beta_ + prior_weight * self.beta_0
+            alpha = self.alpha + prior_weight * self.alpha_0
+            beta = self.beta + prior_weight * self.beta_0
         else:
-            alpha = self.alpha_ + self.alpha_0
-            beta = self.beta_ + self.beta_0
+            alpha = self.alpha + self.alpha_0
+            beta = self.beta + self.beta_0
 
         # Mean of Beta-distributed rv
-        self.theta_ = alpha / (alpha + beta)
+        self.theta = alpha / (alpha + beta)
 
         # NEW: calculate theta assuming weak prior
         if self.store_wp:
-            alpha = self.alpha_ + self._wp_weight * self.alpha_0
-            beta = self.beta_ + self._wp_weight * self.beta_0
+            alpha = self.alpha + self._wp_weight * self.alpha_0
+            beta = self.beta + self._wp_weight * self.beta_0
             self.theta_wp_ = alpha / (alpha + beta)
     #
     # def calc_var_theta(self):
@@ -117,8 +117,8 @@ class BetaBernoulliModel:
         k : int
             index of stratum where label was sampled
         """
-        self.alpha_[k] += ell
-        self.beta_[k] += 1 - ell
+        self.alpha[k] += ell
+        self.beta[k] += 1 - ell
 
         self._update_theta()
 
@@ -281,7 +281,7 @@ class OASISSampler(BaseSampler):
                  decaying_prior=True, record_inst_hist=False,
                  max_iter=None):
         super().__init__(alpha, predictions, scores, oracle, max_iter=max_iter)
-        self.TP, self.FP, self.FN = [0] * 3
+        self.tp, self.fp, self.fn = [0] * 3
         self.epsilon = epsilon
         self.strata = Strata(stratify_by_cum_sqrt_f_method(scores))
         # Calculate mean prediction per stratum
@@ -292,10 +292,10 @@ class OASISSampler(BaseSampler):
 
         # Instantiate Beta-Bernoulli model using probabilities averaged over
         theta_0 = self.strata.intra_mean(self.scores)
-        self.bayesian_model = BetaBernoulliModel.from_prior(theta_0, self.prior_strength, decaying_prior=True)
+        self.bayesian_model: BetaBernoulliModel = BetaBernoulliModel.from_prior(theta_0, self.prior_strength, decaying_prior=True)
         self.f_guess = self._calc_F_guess(self.alpha,
                                           self.preds_avg_in_strata,
-                                          self.bayesian_model.theta_,
+                                          self.bayesian_model.theta,
                                           self.strata.weights)
 
         # Array to record history of instrumental distributions
@@ -318,10 +318,10 @@ class OASISSampler(BaseSampler):
 
     def update_estimate_and_sampler(self, ell, ell_hat, weight, **kwargs):
         #: Updating the estimate is handled in the base class
-        self.TP += ell_hat * ell * weight
-        self.FP += ell_hat * (1 - ell) * weight
-        self.FN += (1 - ell_hat) * ell * weight
-        self.f_scores[self.idx] = compute_f_score(self.alpha, self.TP, self.FP, self.FN)
+        self.tp += ell_hat * ell * weight
+        self.fp += ell_hat * (1 - ell) * weight
+        self.fn += (1 - ell_hat) * ell * weight
+        self.f_scores[self.idx] = compute_f_score(self.alpha, self.tp, self.fp, self.fn)
 
         #: Update the instrumental distribution by updating the BB model
         self.bayesian_model.update(ell, kwargs['stratum'])
@@ -341,7 +341,7 @@ class OASISSampler(BaseSampler):
         alpha = self.alpha
         preds = self.preds_avg_in_strata
         weights = self.strata.weights
-        p1 = self.bayesian_model.theta_
+        p1 = self.bayesian_model.theta
         p0 = 1 - p1
 
         # update F guess
