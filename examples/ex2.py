@@ -7,7 +7,6 @@ from oasis import OASISSampler
 from utility import scores2probs
 
 
-
 def oracle(labels, idx):
     return labels[idx]
 
@@ -31,3 +30,5 @@ if __name__ == '__main__':
     print("estimated f score")
     print(f"{np.mean(f_scores)=}")
     print(f"{np.std(f_scores)=}")
+    print(f"{f_scores.max()=}")
+    print(f"{f_scores.min()=}")
