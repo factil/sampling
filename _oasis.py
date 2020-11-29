@@ -1,6 +1,8 @@
 import numpy as np
-import warnings
-import sys
+
+from sampler_abc import BaseSampler
+from stratification import Strata, stratify_by_cum_sqrt_f_method
+from utility import compute_f_score
 
 
 class BetaBernoulliModel:
@@ -26,13 +28,13 @@ class BetaBernoulliModel:
 
     Attributes
     ----------
-    alpha_ : numpy.ndarray, shape=(n_strata,)
+    alpha : numpy.ndarray, shape=(n_strata,)
         posterior value of alpha (excluding prior)
 
-    beta_ : numpy.ndarray, shape=(n_strata,)
+    beta : numpy.ndarray, shape=(n_strata,)
         posterior value of beta (excluding prior)
 
-    theta_ : numpy.ndarray, shape=(n_strata,)
+    theta : numpy.ndarray, shape=(n_strata,)
         posterior estimate of theta
 
     var_theta_ : numpy.ndarray, shape=(n_strata,)
@@ -44,66 +46,65 @@ class BetaBernoulliModel:
         if len(alpha_0) != len(beta_0):
             raise ValueError("alpha_0 and beta_0 have inconsistent lengths")
 
-        self.alpha_0 = alpha_0.copy()
-        self.beta_0 = beta_0.copy()
+        # they are read only
+        self.alpha_0 = alpha_0
+        self.beta_0 = beta_0
 
         self.store_variance = store_variance
         self.decaying_prior = decaying_prior
         self.store_wp = store_wp
-        self._size = len(alpha_0)
+        self.size = len(alpha_0)
 
         # Number of "1" and "0" label resp. (excluding prior)
-        self.alpha_ = np.zeros(self._size, dtype=int)
-        self.beta_ = np.zeros(self._size, dtype=int)
+        self.alpha = np.zeros(self.size, dtype=int)
+        self.beta = np.zeros(self.size, dtype=int)
 
         # Estimate of fraction of positive labels in each stratum
-        self.theta_ = np.empty(self._size, dtype=float)
+        self.theta = np.empty(self.size, dtype=float)
         # Estimate of variance in theta
-        if self.store_variance:
-            self.var_theta_ = np.empty(self._size, dtype=float)
+        # if self.store_variance:
+        #     self.var_theta_ = np.empty(self._size, dtype=float)
 
         # Estimates without incorporating prior (wp = weak prior)
         if self.store_wp:
-            self.theta_wp_ = np.empty(self._size, dtype=float)
+            self.theta_wp_ = np.empty(self.size, dtype=float)
             self._wp_weight = 1e-20
 
         # Initialise estimates
-        self._calc_theta()
-        if self.store_variance:
-            self._calc_var_theta()
+        self._update_theta()
 
-    def calc_theta(self):
+    def _update_theta(self):
         """Calculate an estimate of theta"""
         if self.decaying_prior:
-            n_sampled = np.clip(self.alpha_ + self.beta_, 1, np.inf)
+            n_sampled = np.clip(self.alpha + self.beta, 1, np.inf)
             prior_weight = 1/n_sampled
-            alpha = self.alpha_ + prior_weight * self.alpha_0
-            beta = self.beta_ + prior_weight * self.beta_0
+            alpha = self.alpha + prior_weight * self.alpha_0
+            beta = self.beta + prior_weight * self.beta_0
         else:
-            alpha = self.alpha_ + self.alpha_0
-            beta = self.beta_ + self.beta_0
+            alpha = self.alpha + self.alpha_0
+            beta = self.beta + self.beta_0
 
         # Mean of Beta-distributed rv
-        self.theta_ = alpha / (alpha + beta)
+        self.theta = alpha / (alpha + beta)
 
         # NEW: calculate theta assuming weak prior
         if self.store_wp:
-            alpha = self.alpha_ + self._wp_weight * self.alpha_0
-            beta = self.beta_ + self._wp_weight * self.beta_0
+            alpha = self.alpha + self._wp_weight * self.alpha_0
+            beta = self.beta + self._wp_weight * self.beta_0
             self.theta_wp_ = alpha / (alpha + beta)
-
-    def calc_var_theta(self):
-        """Calculate an estimate of the var(theta)"""
-        if self.decaying_prior:
-            n_sampled = np.clip(self.alpha_ + self.beta_, 1, np.inf)
-            prior_weight = 1/n_sampled
-            alpha = self.alpha_ + prior_weight * self.alpha_0
-            beta = self.beta_ + prior_weight * self.beta_0
-        else:
-            alpha = self.alpha_ + self.alpha_0
-            beta = self.beta_ + self.beta_0
-        # Variance of Beta-distributed rv
-        self.var_theta_ = alpha * beta / ((alpha + beta)**2 * (alpha + beta + 1))
+    #
+    # def calc_var_theta(self):
+    #     """Calculate an estimate of the var(theta)"""
+    #     if self.decaying_prior:
+    #         n_sampled = np.clip(self.alpha_ + self.beta_, 1, np.inf)
+    #         prior_weight = 1/n_sampled
+    #         alpha = self.alpha_ + prior_weight * self.alpha_0
+    #         beta = self.beta_ + prior_weight * self.beta_0
+    #     else:
+    #         alpha = self.alpha_ + self.alpha_0
+    #         beta = self.beta_ + self.beta_0
+    #     # Variance of Beta-distributed rv
+    #     self.var_theta_ = alpha * beta / ((alpha + beta)**2 * (alpha + beta + 1))
 
     def update(self, ell, k):
         """Update the posterior and estimates after a label is sampled
@@ -116,26 +117,10 @@ class BetaBernoulliModel:
         k : int
             index of stratum where label was sampled
         """
-        self.alpha_[k] += ell
-        self.beta_[k] += 1 - ell
+        self.alpha[k] += ell
+        self.beta[k] += 1 - ell
 
-        self._calc_theta()
-        if self.store_variance:
-            self._calc_var_theta()
-
-    def reset(self):
-        """Reset the instance to its initial state"""
-        self.alpha_ = np.zeros(self._size, dtype=int)
-        self.beta_ = np.zeros(self._size, dtype=int)
-        self.theta_ = np.empty(self._size, dtype=float)
-        if self.store_variance:
-            self.var_theta_ = np.empty(self._size, dtype=float)
-        if self.store_wp:
-            self.theta_wp_ = np.empty(self._size, dtype=float)
-
-        self.calc_theta()
-        if self.store_variance:
-            self.calc_var_theta()
+        self._update_theta()
 
     @classmethod
     def from_prior(cls, theta_0, prior_strength, **kwargs):
@@ -164,8 +149,7 @@ class BetaBernoulliModel:
         return cls(alpha_0, beta_0, **kwargs)
 
 
-
-class OASISSampler:
+class OASISSampler(BaseSampler):
     """Optimal Asymptotic Sequential Importance Sampling (OASIS) for estimation
     of the weighted F-measure.
 
@@ -292,138 +276,81 @@ class OASISSampler:
        Entity Resolution OASIS: Optimal Asymptotic Sequential Importance
        Sampling, arXiv:1703.00617 [cs.LG], Mar 2017.
     """
-    def __init__(self, alpha, predictions, scores, oracle, proba=False,
-                 epsilon=1e-3, opt_class=None, prior_strength=None,
-                 decaying_prior=True, strata=None, record_inst_hist=False,
-                 max_iter=None, identifiers=None, debug=False, **kwargs):
-        super(OASISSampler, self).__init__(alpha, predictions, oracle,
-                                           max_iter, identifiers, True, debug)
-
-        # scores
-
-        self.scores = scores
-
+    def __init__(self, alpha, predictions, scores, oracle,
+                 epsilon=1e-3, prior_strength=None,
+                 decaying_prior=True, record_inst_hist=False,
+                 max_iter=None):
+        super().__init__(alpha, predictions, scores, oracle, max_iter=max_iter)
+        self.tp, self.fp, self.fn = [0] * 3
+        self.epsilon = epsilon
+        self.strata = Strata(stratify_by_cum_sqrt_f_method(scores))
         # Calculate mean prediction per stratum
-        self._preds_avg_in_strata = self.strata.intra_mean(self.predictions)
+        self.preds_avg_in_strata = self.strata.intra_mean(self.predictions)
 
         # Choose prior strength if not given
-        self.prior_strength = prior_strength or 2*self.strata.n_strata_
-
+        self.prior_strength = prior_strength or 2*self.strata.n_strata
 
         # Instantiate Beta-Bernoulli model using probabilities averaged over
-        # opt_class
         theta_0 = self.strata.intra_mean(self.scores)
-        self._BB_model = BetaBernoulliModel.from_prior(theta_0, self.prior_strength, decaying_prior=True)
-        self._F_guess = self._calc_F_guess(self.alpha,
-                                           self._preds_avg_in_strata,
-                                           self._BB_model.theta_,
-                                           self.strata.weights_)
+        self.bayesian_model: BetaBernoulliModel = BetaBernoulliModel.from_prior(theta_0, self.prior_strength, decaying_prior=True)
+        self.f_guess = self._calc_F_guess(self.alpha,
+                                          self.preds_avg_in_strata,
+                                          self.bayesian_model.theta,
+                                          self.strata.weights)
 
         # Array to record history of instrumental distributions
 
-        self._inst_pmf = np.zeros(self.strata.n_strata_, dtype=float)
+        self._inst_pmf = np.zeros(self.strata.n_strata, dtype=float)
 
-    # @property
-    # def inst_pmf_(self):
-    #     if self.record_inst_hist:
-    #         return self._inst_pmf[:, 0:self.t_]
-    #     else:
-    #         return self._inst_pmf
-    # @inst_pmf_.setter
-    # def inst_pmf_(self, value):
-    #     raise AttributeError("can't set attribute.")
-    # @inst_pmf_.deleter
-    # def inst_pmf_(self):
-    #     raise AttributeError("can't delete attribute.")
-
-    def _sample_item(self, **kwargs):
+    def select_next_item(self, sample_with_replacement, **kwargs):
         """Sample an item from the pool according to the instrumental
         distribution
         """
-        t = self.t_
 
         # Update instrumental distribution
         self._calc_inst_pmf()
 
-        if self.record_inst_hist:
-            inst_pmf = self._inst_pmf[:,t]
-        else:
-            inst_pmf = self._inst_pmf
-
         # Sample label and record weight
-        loc, stratum_idx = self.strata.sample(pmf = inst_pmf)
-        weight = self.strata.weights_[stratum_idx]/inst_pmf[stratum_idx]
+        loc, stratum_idx = self.strata.sample(pmf=self._inst_pmf)
+        weight = self.strata.weights[stratum_idx] / self._inst_pmf[stratum_idx]
 
         return loc, weight, {'stratum': stratum_idx}
 
-    def _update_estimate_and_sampler(self, ell, ell_hat, weight, extra_info,
-                                     **kwargs):
+    def update_estimate_and_sampler(self, ell, ell_hat, weight, **kwargs):
         #: Updating the estimate is handled in the base class
-        super(OASISSampler, self)._update_estimate_and_sampler(ell, ell_hat, \
-                                                weight, extra_info, **kwargs)
+        self.tp += ell_hat * ell * weight
+        self.fp += ell_hat * (1 - ell) * weight
+        self.fn += (1 - ell_hat) * ell * weight
+        self.f_scores[self.idx] = compute_f_score(self.alpha, self.tp, self.fp, self.fn)
 
         #: Update the instrumental distribution by updating the BB model
-        self._BB_model.update(ell, extra_info['stratum'])
-
-    # def _calc_BB_prior(self, theta_0):
-    #     """Generate a prior for the BB model
-    #
-    #     Parameters
-    #     ----------
-    #     theta_0 : array-like, shape=(n_strata,)
-    #         array of oracle probabilities (probability of a "1" label)
-    #         for each stratum. This is just a guess.
-    #
-    #     Returns
-    #     -------
-    #     alpha_0 : numpy.ndarray, shape=(n_strata,)
-    #         "alpha" hyperparameters for an ensemble of Beta-distributed rvs
-    #
-    #     beta_0 : numpy.ndarray, shape=(n_strata,)
-    #         "beta" hyperparameters for an ensemble of Beta-distributed rvs
-    #     """
-    #     #: Easy vars
-    #     prior_strength = self.prior_strength
-    #
-    #     #weighted_strength = self.weights * strength
-    #     n_strata = len(theta_0)
-    #     weighted_strength = prior_strength / n_strata
-    #     alpha_0 = theta_0 * weighted_strength
-    #     beta_0 = (1 - theta_0) * weighted_strength
-    #     return alpha_0, beta_0
+        self.bayesian_model.update(ell, kwargs['stratum'])
 
     def _calc_F_guess(self, alpha, predictions, theta, weights):
         """Calculate an estimate of the F-measure based on the scores"""
-        num = np.sum(predictions.T * theta * weights, axis=1)
-        den = np.sum((1 - alpha) * theta * weights + \
-                     alpha * predictions.T * weights, axis=1)
-        F_guess = num/den
-        # Ensure guess is not undefined
-        F_guess[den==0] = 0.5
-        return F_guess
+        num = np.sum(predictions * theta * weights)
+        den = np.sum((1 - alpha) * theta * weights +\
+                     alpha * predictions * weights)
+        if den == 0 or (num / den) == 0:
+            return 0.5
+        return num / den
 
     def _calc_inst_pmf(self):
         """Calculate the epsilon-greedy instrumental distribution"""
-        # Easy vars
-        t = self.t_
         epsilon = self.epsilon
         alpha = self.alpha
-        preds = self._preds_avg_in_strata
-        weights = self.strata.weights_[:,np.newaxis]
-        p1 = self._BB_model.theta_
+        preds = self.preds_avg_in_strata
+        weights = self.strata.weights
+        p1 = self.bayesian_model.theta
         p0 = 1 - p1
-        if t==0:
-            F = self._F_guess[self.opt_class]
-        else:
-            F = self._estimate[t - 1, self.opt_class]
-            # Fill in non-finite estimates with the initial guess
-            nonfinite = ~np.isfinite(F)
-            F[nonfinite] = self._F_guess[self.opt_class][nonfinite]
 
+        # update F guess
+        if not np.isnan(self.f_scores[self.idx-1]):
+            self.f_guess = self.f_scores[self.idx-1]
+
+        F = self.f_guess
         # Calculate optimal instrumental pmf
-        sqrt_arg = np.sum(preds * (alpha**2 * F**2 * p0 + (1 - F)**2 * p1) + \
-                          (1 - preds) * (1 - alpha)**2 * F**2 * p1, \
-                          axis=1, keepdims=True) #: sum is over classifiers
+        sqrt_arg = preds * (alpha**2 * F**2 * p0 + (1 - F)**2 * p1) + (1 - preds) * (1 - alpha)**2 * F**2 * p1
         inst_pmf = weights * np.sqrt(sqrt_arg)
         # Normalize
         inst_pmf /= np.sum(inst_pmf)
@@ -432,17 +359,4 @@ class OASISSampler:
         inst_pmf += epsilon * weights
         self._inst_pmf = inst_pmf
 
-
-
-if __name__ == '__main__':
-    from oasis.experiments import Data
-    data = Data()
-    data.read_h5('Amazon-GoogleProducts-test.h5')
-
-    def oracle(idx):
-        return data.labels[idx]
-    alpha = 0.5
-
-    smplr =OASISSampler(alpha, data.preds, data.scores, oracle)
-    smplr.sample_distinct(5000)  #: query labels for 5000 distinct items
 
