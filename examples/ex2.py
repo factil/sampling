@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('.')
+
 import json
 from functools import partial
 import numpy as np
@@ -25,10 +29,10 @@ if __name__ == '__main__':
     oracle = partial(oracle, labels)
     n_runs = 30
     f_scores = np.empty(n_runs)
-    for cls in [OASISSampler, MySampler]:
-        print(cls.__name__)
+    for sampler_gen in [lambda: OASISSampler(0.5, preds, scores, oracle), lambda:MySampler(0.5, preds, probs, oracle)]:
+        print(sampler_gen().__class__.__name__)
         for i in tqdm.tqdm(range(n_runs)):
-            sampler = cls(0.5, preds, probs, oracle)
+            sampler = sampler_gen()
             sampler.sample_distinct(5000)
             f_scores[i] = sampler.f_score_history()[-1]
         print("estimated f score")
@@ -37,4 +41,4 @@ if __name__ == '__main__':
         print(f"{np.std(f_scores)=}")
         print(f"{f_scores.max()=}")
         print(f"{f_scores.min()=}")
-        print(f"{'*' + '-' * 30 + '*'}")
+        print(f"{'*' + '-' * 120 + '*'}")
