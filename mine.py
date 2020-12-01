@@ -20,7 +20,7 @@ class MySampler(BaseSampler):
         self.strata_allocations = np.digitize(self.scores, bins, right=True)
         strata_counts = Counter(self.strata_allocations)
         self.n_totals = len(scores)
-        strata_proportions = {k: v/self.n_totals for k, v in strata_counts.items()}
+        strata_proportions = {k: v / self.n_totals for k, v in strata_counts.items()}
         self.weights = {k: v/(1/n_bins) for k, v in strata_proportions.items()}
 
     def select_next_item(self, sample_with_replacement: bool, **kwargs):
