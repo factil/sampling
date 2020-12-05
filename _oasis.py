@@ -350,6 +350,8 @@ class OASISSampler(BaseSampler):
 
         F = self.f_guess
         # Calculate optimal instrumental pmf
+
+        # In search of an entity resolution Oasis:4.2.3
         sqrt_arg = preds * (alpha**2 * F**2 * p0 + (1 - F)**2 * p1) + (1 - preds) * (1 - alpha)**2 * F**2 * p1
         inst_pmf = weights * np.sqrt(sqrt_arg)
         # Normalize
