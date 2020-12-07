@@ -27,7 +27,7 @@ if __name__ == '__main__':
 
     # initialize all samplers
     oracle = partial(oracle, labels)
-    n_runs = 30
+    n_runs = 50
     f_scores = np.empty(n_runs)
     for sampler_gen in [lambda: OASISSampler(0.5, preds, scores, oracle), lambda:MySampler(0.5, preds, probs, oracle)]:
         print(sampler_gen().__class__.__name__)
