@@ -1,51 +1,8 @@
 import numpy as np
 
 
-def bin_width_using_freedman_diaconis_rule(obs):
-    IQR = np.percentile(obs, 75) - np.percentile(obs, 25)
-    N = len(obs)
-    return 2 * IQR * N ** (-1 / 3)
 
 
-def stratify_by_equal_size_method(scores, goal_n_strata=None):
-    if not goal_n_strata:
-        strata_width = bin_width_using_freedman_diaconis_rule(scores)
-        goal_n_strata = np.ceil(np.ptp(scores) / strata_width).astype(np.int)
-    n_items = len(scores)
-    sorted_ids = scores.argsort()
-    quotient = n_items // goal_n_strata
-    remainder = n_items % goal_n_strata
-    print("q and r", quotient, remainder)
-    allocations = np.empty(n_items, dtype='int')
-    st_pops = (np.repeat(quotient, goal_n_strata) + np.concatenate((np.ones(remainder), np.zeros(goal_n_strata-remainder))))\
-        .cumsum().astype(int)
-
-    for k, (start, end) in enumerate(zip(np.concatenate((np.zeros(1), st_pops)).astype(int), st_pops)):
-        print(start, end)
-        allocations[sorted_ids[start:end]] = k
-
-    return allocations
-
-
-def stratify_by_cum_sqrt_f_method(scores):
-    score_width = bin_width_using_freedman_diaconis_rule(scores)
-    n_bins = np.ceil(np.ptp(scores) / score_width).astype(int)
-    counts, score_bins = np.histogram(scores, bins=n_bins)
-    csf = np.sqrt(counts).cumsum() # cum sqrt(F)
-    strata_width = bin_width_using_freedman_diaconis_rule(csf)
-    new_bins = []
-    j = 0
-    for x, sb in zip(csf, score_bins):
-        if x >= strata_width * j:
-            new_bins.append(sb)
-            j += 1
-
-    new_bins.append(score_bins[-1])
-    # add margin
-    new_bins[0] -= 0.01
-    new_bins[-1] += 0.01
-
-    return np.digitize(scores, bins=new_bins, right=True) - 1
 
 
 class Strata:
