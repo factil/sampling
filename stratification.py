@@ -1,188 +1,98 @@
+import random
+import bisect
 import numpy as np
 
 
+def frequency_counts(arr, n):
+    result = np.zeros(n)
+    for i in arr:
+        result[i] += 1
+    return result
 
 
+def bin_width_using_freedman_diaconis_rule(obs):
+    IQR = np.percentile(obs, 75) - np.percentile(obs, 25)
+    N = len(obs)
+    return 2 * IQR * N ** (-1 / 3)
+
+
+def stratify_by_equal_size_method(scores):
+    strata_width = bin_width_using_freedman_diaconis_rule(scores)
+    goal_n_strata = np.ceil(np.ptp(scores) / strata_width).astype(np.int)
+    print(goal_n_strata)
+    n_items = len(scores)
+    sorted_ids = scores.argsort()
+    quotient = n_items // goal_n_strata
+    remainder = n_items % goal_n_strata
+    allocations = np.empty(n_items, dtype='int')
+    st_pops = (np.repeat(quotient, goal_n_strata) + np.concatenate(
+        (np.ones(remainder), np.zeros(goal_n_strata - remainder)))) \
+        .cumsum().astype(int)
+
+    bounds = [scores.min()]
+    for k, (start, end) in enumerate(zip(np.concatenate((np.zeros(1), st_pops)).astype(int), st_pops)):
+        allocations[sorted_ids[start:end]] = k
+        bounds.append(scores[sorted_ids[end - 1]])
+
+    return Strata(allocations, bounds)
+
+
+def stratify_by_cum_sqrt_f_method(scores):
+    score_width = bin_width_using_freedman_diaconis_rule(scores)
+    n_bins = np.ceil(np.ptp(scores) / score_width).astype(int)
+    counts, score_bins = np.histogram(scores, bins=n_bins)
+    csf = np.sqrt(counts).cumsum() # cum sqrt(F)
+    strata_width = bin_width_using_freedman_diaconis_rule(csf)
+    bounds = []
+    j = 0
+    for x, sb in zip(csf, score_bins):
+        if x >= strata_width * j:
+            bounds.append(sb)
+            j += 1
+
+    bounds.append(score_bins[-1])
+    # add margin
+    bounds[0] = max(bounds[0]-0.01, 0)
+    bounds[-1] = min(bounds[-1]+0.01, 1)
+
+    return np.digitize(scores, bins=bounds, right=True) - 1, bounds
 
 
 class Strata:
-    """Represents a collection of strata and facilitates sampling from them
+    def __init__(self, allocations, bounds):
+        self.n_strata = np.max(allocations) + 1
+        self.bounds = bounds
+        self.strata = [[] for _ in range(self.n_strata)]
 
-    This class takes an array of prescribed stratum allocations for a finite
-    pool and stores the information in a form that is convenient for
-    sampling. The items in the pool are referred to uniquely by their location
-    in the input array. An item may be sampled from the strata (according to an
-    arbitrary distribution over the strata) using the `sample` method.
+        for i, si in enumerate(allocations):
+            self.strata[si].append(i)
 
-    Parameters
-    ----------
-    allocations : array-like, shape=(n_items,)
-        ordered array of ints or strs which specifies the name/identifier of
-        the allocated stratum for each item in the pool.
+        self.sizes = [len(x) for x in self.strata]
 
-    Attributes
-    ----------
-    allocations_ : list of numpy.ndarrays, length n_strata
-        represents the items contained within each stratum using a list of
-        arrays. Each array in the list refers to a particular stratum, and
-        stores the items contained within that stratum. Items are referred to
-        by their location in the input array.
+    def __len__(self):
+        return len(self.bounds) - 1
 
-    n_strata : int
-        number of strata
+    def sample_in_strata(self, i):
+        return random.choice(self.strata[i])
 
-    n_items : int
-        number of items in the pool (i.e. in all of the strata)
+    def stratum_idx_for_score(self, x):
+        return bisect.bisect(self.bounds, x) - 1
 
-    names : numpy.ndarray, shape=(n_strata,)
-        array containing names/identifiers for each stratum
+    def strata_bounds(self):
+        return self.bounds[:]
 
-    indices_ : numpy.ndarray, shape=(n_strata,)
-        array containing unique indices for each stratum
-
-    sizes : numpy.ndarray, shape=(n_strata,)
-        array specifying how many items are contained with each stratum
-
-    weights : numpy.ndarray, shape=(n_strata,)
-        array specifying the stratum weights (sizes/n_items)
-    """
-    def __init__(self, allocations):
-        # TODO Check that input is valid
-
-        # Names of strata (could be ints or strings for example)
-        self.names = np.unique(allocations)
-
-        # Number of strata
-        self.n_strata = len(self.names)
-
-        # Size of pool
-        self.n_items = len(allocations)
-
-        self.allocations_ = []
-        for name in self.names:
-            self.allocations_.append(np.where(allocations == name)[0])
-
-        # Calculate population for each stratum
-        self.sizes = np.array([len(ids) for ids in self.allocations_])
-
-        # Calculate weights
-        self.weights = self.sizes / self.n_items
-
-        # Stratum indices
-        self.indices_ = np.arange(self.n_strata, dtype=int)
-
-        # Keep a record of which items have been sampled
-        self.item_sampled = [np.repeat(False, x) for x in self.sizes]
-
-        # Keep a record of how many items have been sampled
-        self.n_sampled_in_each_strata = np.zeros(self.n_strata, dtype=int)
-
-    def sample_stratum(self, pmf=None, replace=True):
-        """Sample a stratum
-
-        Parameters
-        ----------
-        pmf : array-like, shape=(n_strata,), optional, default None
-            probability distribution to use when sampling from the    strata. If
-            not given, use the stratum weights.
-
-        replace : bool, optional, default True
-            whether to sample with replacement
-
-        Returns
-        -------
-        int
-            a randomly selected stratum index
+    @classmethod
+    def from_esm(cls, scores):
         """
-        pmf = pmf if pmf is not None else self.weights
-        if replace:
-            # Find strata which have been fully sampled (i.e. are now empty)
-            return np.random.choice(self.indices_, p=pmf)
-
-        empty = (self.n_sampled_in_each_strata >= self.sizes)
-        if np.any(empty):
-            pmf = pmf[~empty]
-            if np.sum(pmf) == 0:
-                raise RuntimeError("all datapoints have been sampled")
-            pmf /= np.sum(pmf)
-
-        return np.random.choice(self.indices_[~empty], p=pmf)
-
-    def sample_in_stratum(self, stratum_idx, replace=True):
-        """Sample an item uniformly from a stratum
-
-        Parameters
-        ----------
-        stratum_idx : int
-            stratum index to sample from
-
-        replace : bool, optional, default True
-            whether to sample with replacement
-
-        Returns
-        -------
-        int
-            location of the randomly selected item in the original input array
+        stratify with equal size method
         """
-        if replace:
-            stratum_loc = np.random.choice(self.sizes[stratum_idx])
-        else:
-            # Extract only the unsampled items
-            stratum_locs, = np.where(~self.item_sampled[stratum_idx])
-            stratum_loc = np.random.choice(stratum_locs)
+        allocations, bounds = stratify_by_cum_sqrt_f_method(scores)
+        return Strata(allocations, bounds)
 
-        # Record that item has been sampled
-        self.item_sampled[stratum_idx][stratum_loc] = True
-        self.n_sampled_in_each_strata[stratum_idx] += 1
-        # Get generic location
-        loc = self.allocations_[stratum_idx][stratum_loc]
-        return loc
-
-    def sample(self, replace=True, pmf=None):
-        """Sample an item from the strata
-
-        Parameters
-        ----------
-        pmf : array-like, shape=(n_strata,), optional, default None
-            probability distribution to use when sampling from the strata. If
-            not given, use the stratum weights.
-
-        replace : bool, optional, default True
-            whether to sample with replacement
-
-        Returns
-        -------
-        loc : int
-            location of the randomly selected item in the original input array
-
-        stratum_idx : int
-            the stratum index that was sampled from
+    @classmethod
+    def from_csf(cls, scores):
         """
-        kwargs = {}
-        if pmf is not None:
-            kwargs.update(pmf=pmf)
-
-        stratum_idx = self.sample_stratum(replace=replace, **kwargs)
-        loc = self.sample_in_stratum(stratum_idx, replace=replace)
-        return loc, stratum_idx
-
-    def intra_mean(self, values):
-        """Calculate the mean of a quantity within strata
-
-        Parameters
-        ----------
-        values : array-like, shape=(n_items,n_class)
-            array containing the values of the quantity for each item in the
-            pool
-
-        Returns
-        -------
-        numpy.ndarray, shape=(n_strata,n_class)
-            array containing the mean value of the quantity within each stratum
+        stratify with cum sqrt f method
         """
-        return np.array([np.mean(values[x]) for x in self.allocations_])
-
-    def reset(self):
-        """Reset the instance to begin sampling from scratch"""
-        self.item_sampled = [np.repeat(False, x) for x in self.sizes]
-        self.n_sampled_in_each_strata = np.zeros(self.n_strata, dtype=int)
+        allocations, bounds = stratify_by_cum_sqrt_f_method(scores)
+        return Strata(allocations, bounds)
