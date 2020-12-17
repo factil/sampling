@@ -2,39 +2,45 @@ from typing import Callable
 from collections import Counter
 import random
 import numpy as np
-from sampler_abc import BaseSampler
+from sampler_abc import SamplerInternal
 from utility import compute_f_score
 
 
-class MySampler(BaseSampler):
-    def __init__(self, alpha: float,
-                 predictions,  # 1d numpy array
+class StratifiedUniformSampler(SamplerInternal):
+    def __init__(self,
+                 alpha: float,
                  scores,  # 1d numpy array
-                 oracle: Callable,
-                 n_bins=30,
-                 max_iter=None):
-        super().__init__(alpha, predictions, scores, oracle, max_iter=max_iter)
+                 strata,
+                 threshold=0.5, **kwargs):
+        super().__init__(alpha, scores, strata, threshold=threshold, **kwargs)
+        self.strata = strata
+        n_strata = len(self.strata)
         self.TP, self.FP, self.FN = [0] * 3
-        bins = [x/n_bins for x in range(n_bins+1)]
-        # print(bins)
-        self.strata_allocations = np.digitize(self.scores, bins, right=True)
-        strata_counts = Counter(self.strata_allocations)
         self.n_totals = len(scores)
-        strata_proportions = {k: v / self.n_totals for k, v in strata_counts.items()}
-        self.weights = {k: v/(1/n_bins) for k, v in strata_proportions.items()}
+        self.weights = [(v/self.n_totals) / (1/n_strata) for v in self.strata.sizes]
+        self.current_weight = None
 
-    def select_next_item(self, sample_with_replacement: bool, **kwargs):
-        strata_idx = random.choice(list(self.weights.keys()))
-        loc = np.random.choice(np.arange(self.n_totals)[self.strata_allocations == strata_idx])
-        return loc, self.weights[strata_idx], None
+    def _select(self) -> int:
+        """
+        select return a strata idx
+        means if we have a labelled pair with a score that falls in a strata
+        we can reuse a old labelled pair instead of consulting human oracle.
+        """
+        stratum_idx = random.choice(range(len(self.weights)))
+        self.current_weight = self.weights[stratum_idx]
+        return stratum_idx
 
-    def update_estimate_and_sampler(self, ell, ell_hat, weight, **kwargs):
-        """Update the estimate after querying the label for an item"""
+    def _set(self, idx: int, label: bool):
+        """
+        set label for the pair selected
+        """
+        ell = label
+        ell_hat = self.predictions[idx]
+        weight = self.current_weight
         self.TP += ell_hat * ell * weight
         self.FP += ell_hat * (1 - ell) * weight
         self.FN += (1 - ell_hat) * ell * weight
-        self.f_scores[self.idx] = compute_f_score(self.alpha, self.TP, self.FP, self.FN)
-
+        self.f_scores.append(compute_f_score(self.alpha, self.TP, self.FP, self.FN))
 
 
 
