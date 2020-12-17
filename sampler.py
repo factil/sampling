@@ -1,4 +1,5 @@
 from sampler_abc import SamplerInternal
+from mine import StratifiedUniformSampler
 from druck import DruckSampler
 from stratification import Strata
 from labelled_pairs import LabelledPairs
@@ -61,7 +62,8 @@ if __name__ == '__main__':
     # initialize all samplers
     oracle = partial(oracle, labels)
     #print(probs)
-    sampler = Sampler(DruckSampler, 0.5, probs, [], [])
+    sampler = Sampler(StratifiedUniformSampler, 0.5, probs, [], [])
     sampler.sample(oracle, 5000)
+    print(sampler.f_score_history())
     # print(sampler.internal.number_sampled_at_each_stratum)
     # print(sampler.strata.sizes)
