@@ -67,7 +67,7 @@ def stratify_by_cum_sqrt_f_method(scores):
 
 class Strata:
     def __init__(self, allocations, bounds):
-        self.n_strata = np.max(allocations) + 1
+        self.n_strata = len(bounds) - 1
         self.bounds = bounds
         self.strata = [[] for _ in range(self.n_strata)]
 
