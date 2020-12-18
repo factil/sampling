@@ -1,6 +1,7 @@
 from sampler_abc import SamplerInternal
 from mine import StratifiedUniformSampler
 from druck import DruckSampler
+from oasis_new import OASISSampler
 from stratification import Strata
 from labelled_pairs import LabelledPairs
 
@@ -14,7 +15,11 @@ class Sampler:
                  labels,
                  threshold=0.5, **kwargs):
 
-        self.strata = Strata.from_csf(scores)
+        if n_strata := kwargs.get('n_strata'):
+            self.strata = Strata.from_usm(scores, n_strata)
+        else:
+            self.strata = Strata.from_csf(scores)
+
         self.internal = internal_cls(alpha,
                                      scores,
                                      self.strata,
@@ -62,7 +67,7 @@ if __name__ == '__main__':
     # initialize all samplers
     oracle = partial(oracle, labels)
     #print(probs)
-    sampler = Sampler(StratifiedUniformSampler, 0.5, probs, [], [])
+    sampler = Sampler(OASISSampler, 0.5, probs, [], [])
     sampler.sample(oracle, 5000)
     print(sampler.f_score_history())
     # print(sampler.internal.number_sampled_at_each_stratum)
