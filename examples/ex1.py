@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append('.')
+
 import json
 from functools import partial
 import numpy as np
@@ -14,7 +18,7 @@ def oracle(labels, idx):
 
 if __name__ == '__main__':
     # from neil's example dataset
-    data = json.load(open('data.json'))
+    data = json.load(open('examples/data.json'))
     labels = np.array(data['labels'])
     scores = np.array(data['scores'])
     preds = np.array(data['preds'])
