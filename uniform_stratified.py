@@ -14,10 +14,10 @@ class StratifiedUniformSampler(SamplerInternal):
                  threshold=0.5, **kwargs):
         super().__init__(alpha, scores, strata, threshold=threshold, **kwargs)
         self.strata = strata
-        n_strata = len(self.strata)
+        self.n_strata = len(self.strata)
         self.TP, self.FP, self.FN = [0] * 3
         self.n_totals = len(scores)
-        self.weights = [(v/self.n_totals) / (1/n_strata) for v in self.strata.sizes]
+        self.weights = [(v/self.n_totals) / (1/self.n_strata) for v in self.strata.sizes]
         self.current_weight = None
 
     def _select(self) -> int:
@@ -26,7 +26,7 @@ class StratifiedUniformSampler(SamplerInternal):
         means if we have a labelled pair with a score that falls in a strata
         we can reuse a old labelled pair instead of consulting human oracle.
         """
-        stratum_idx = random.choice(range(len(self.weights)))
+        stratum_idx = np.random.choice(np.arange(self.n_strata)[self.strata.sizes > 0])
         self.current_weight = self.weights[stratum_idx]
         return stratum_idx
 
