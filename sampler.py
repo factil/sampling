@@ -1,7 +1,7 @@
 from sampler_abc import SamplerInternal
 from mine import StratifiedUniformSampler
 from druck import DruckSampler
-from oasis_new import OASISSampler
+from oasis import OASISSampler
 from stratification import Strata
 from labelled_pairs import LabelledPairs
 
@@ -66,7 +66,6 @@ if __name__ == '__main__':
 
     # initialize all samplers
     oracle = partial(oracle, labels)
-    #print(probs)
     sampler = Sampler(OASISSampler, 0.5, probs, [], [])
     sampler.sample(oracle, 5000)
     print(sampler.f_score_history())
