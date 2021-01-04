@@ -3,9 +3,7 @@ import numpy as np
 from functools import partial
 from utility import scores2probs
 from sampler import Sampler
-from _oasis import OASISSampler
-
-
+from uniform_stratified import StratifiedUniformSampler
 
 
 data = json.load(open('examples/data.json'))
@@ -21,6 +19,6 @@ def oracle(labels, idx):
 
 # initialize all samplers
 oracle = partial(oracle, labels)
-sampler = Sampler(OASISSampler, 0.5, probs, [], [])
+sampler = Sampler(StratifiedUniformSampler, 0.5, probs, [], [], n_strata=10)
 sampler.sample(oracle, 5000)
 print(sampler.f_score_history())
