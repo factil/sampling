@@ -1,7 +1,3 @@
-from sampler_abc import SamplerInternal
-from mine import StratifiedUniformSampler
-from druck import DruckSampler
-from oasis import OASISSampler
 from stratification import Strata
 from labelled_pairs import LabelledPairs
 
@@ -47,27 +43,27 @@ class Sampler:
     def f_score_history(self):
         return self.internal.f_score_history()
 
-
-if __name__ == '__main__':
-    import json
-    import numpy as np
-    from functools import partial
-    from utility import scores2probs
-
-    data = json.load(open('examples/data.json'))
-    labels = np.array(data['labels'])
-    scores = np.array(data['scores'])
-    preds = np.array(data['preds'])
-    probs = scores2probs(scores)
-
-
-    def oracle(labels, idx):
-        return labels[idx]
-
-    # initialize all samplers
-    oracle = partial(oracle, labels)
-    sampler = Sampler(OASISSampler, 0.5, probs, [], [])
-    sampler.sample(oracle, 5000)
-    print(sampler.f_score_history())
-    # print(sampler.internal.number_sampled_at_each_stratum)
-    # print(sampler.strata.sizes)
+#
+# if __name__ == '__main__':
+#     import json
+#     import numpy as np
+#     from functools import partial
+#     from utility import scores2probs
+#
+#     data = json.load(open('examples/data.json'))
+#     labels = np.array(data['labels'])
+#     scores = np.array(data['scores'])
+#     preds = np.array(data['preds'])
+#     probs = scores2probs(scores)
+#
+#
+#     def oracle(labels, idx):
+#         return labels[idx]
+#
+#     # initialize all samplers
+#     oracle = partial(oracle, labels)
+#     sampler = Sampler(OASISSampler, 0.5, probs, [], [])
+#     sampler.sample(oracle, 5000)
+#     print(sampler.f_score_history())
+#     # print(sampler.internal.number_sampled_at_each_stratum)
+#     # print(sampler.strata.sizes)
