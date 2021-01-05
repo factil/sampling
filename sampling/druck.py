@@ -1,7 +1,7 @@
 import numpy as np
-from sampler_abc import SamplerInternal
-from stratification import Strata
-from utility import compute_f_score
+from .sampler_abc import SamplerInternal
+from .stratification import Strata
+from .utility import compute_f_score
 
 
 class DruckSampler(SamplerInternal):

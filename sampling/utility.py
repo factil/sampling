@@ -17,5 +17,9 @@ def compute_f_score(alpha, true_positves, false_positives, false_negatives):
         return num / den
 
 
+def equal_length(x, y):
+    return len(x) == len(y)
+
+
 def is_between_zero_and_one(x):
     return np.all((0 <= x) & (x <= 1))

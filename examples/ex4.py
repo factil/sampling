@@ -3,8 +3,7 @@ import numpy as np
 from functools import partial
 from sampling.utility import scores2probs
 from sampling.sampler import Sampler
-from sampling.oasis import OASISSampler
-
+from sampling.druck import DruckSampler
 
 data = json.load(open('data.json'))
 labels = np.array(data['labels'])
@@ -19,6 +18,6 @@ def oracle(labels, idx):
 
 # initialize all samplers
 oracle = partial(oracle, labels)
-sampler = Sampler(OASISSampler, 0.5, probs, [], [])
+sampler = Sampler(DruckSampler, 0.5, probs, [], [])
 sampler.sample(oracle, 5000)
 print(sampler.f_score_history())

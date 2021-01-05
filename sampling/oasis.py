@@ -1,8 +1,8 @@
 import numpy as np
 
-from sampler_abc import SamplerInternal
-from stratification import Strata, stratify_by_cum_sqrt_f_method
-from utility import compute_f_score
+from .sampler_abc import SamplerInternal
+from .stratification import Strata, stratify_by_cum_sqrt_f_method
+from .utility import compute_f_score
 
 
 class BetaBernoulliModel:
@@ -169,18 +169,6 @@ class OASISSampler(SamplerInternal):
         be scaled to the interval [0,1]. If the scores lie outside [0,1] they
         will be automatically re-scaled by applying the logisitic function.
 
-    oracle : function
-        Function that returns ground truth labels for items in the pool. The
-        function should take an item identifier as input (i.e. its
-        corresponding row index) and return the ground truth label. Valid
-        labels are 0 or 1.
-
-    proba : array-like, dtype=bool, shape=(n_class,), optional, default None
-        Indicates whether the scores are probabilistic, i.e. on the interval
-        [0, 1] for each classifier under evaluation. If proba is False for
-        a classifier, then the corresponding scores will be re-scaled by
-        applying the logistic function. If None, proba will default to
-        False for all classifiers.
 
     epsilon : float, optional, default 1e-3
         Epsilon-greedy parameter. Valid values are on the interval [0, 1]. The
@@ -188,10 +176,6 @@ class OASISSampler(SamplerInternal):
         `1 - epsilon` and the passive distribution is sampled from with
         probability `epsilon`. The sampling is close to "optimal" for small
         epsilon.
-
-    prior_strength : float, optional, default None
-        Quantifies the strength of the prior. May be interpreted as the number
-        of pseudo-observations.
 
     max_iter : int, optional, default None
         Maximum number of iterations to expect for pre-allocating arrays.
@@ -206,56 +190,11 @@ class OASISSampler(SamplerInternal):
 
     Other Parameters
     ----------------
-    opt_class : array-like, dtype=bool, shape=(n_class,), optional, default None
-        Indicates which classifiers to use in calculating the optimal
-        distribution (and prior and strata). If opt_class is False for a
-        classifier, then its predictions and scores will not be used in
-        calculating the optimal distribution, however estimates of its
-        performance will still be calculated.
 
     decaying_prior : bool, optional, default True
         Whether to make the prior strength decay as 1/n_k, where n_k is the
         number of items sampled from stratum k at the current iteration. This
         is a greedy strategy which may yield faster convergence of the estimate.
-
-    record_inst_hist : bool, optional, default False
-        Whether to store the instrumental distribution used at each iteration.
-        This requires extra memory, but can be useful for assessing
-        convergence.
-
-    identifiers : array-like, optional, default None
-        Unique identifiers for the items in the pool. Must match the row order
-        of the "predictions" parameter. If no value is given, defaults to
-        [0, 1, ..., n_items].
-
-    debug : bool, optional, default False
-        Whether to print out verbose debugging information.
-
-    **kwargs :
-        Optional keyword arguments. Includes 'stratification_method',
-        'stratification_n_strata', and 'stratification_n_bins'.
-
-    Attributes
-    ----------
-    estimate_ : numpy.ndarray
-        F-measure estimates for each iteration.
-
-    queried_oracle_ : numpy.ndarray
-        Records whether the oracle was queried at each iteration (True) or
-        whether a cached label was used (False).
-
-    cached_labels_ : numpy.ndarray, shape=(n_items,)
-        Previously sampled ground truth labels for the items in the pool. Items
-        which have not had their labels queried are recorded as NaNs. The order
-        of the items matches the row order for the "predictions" parameter.
-
-    t_ : int
-        Iteration index.
-
-    inst_pmf_ : numpy.ndarray, shape=(n_strata,) or (n_strata, max_iter)
-        Epsilon-greedy instrumental pmf used for sampling. If
-        ``record_inst_hist == False`` only the most recent pmf is returned,
-        otherwise returns the entire history of pmfs in a 2D array.
 
     References
     ----------
