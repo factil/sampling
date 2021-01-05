@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-from stratification import Strata
+from .stratification import Strata
 
 
 class LabelledPairs:

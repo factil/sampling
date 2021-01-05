@@ -2,8 +2,8 @@ from typing import Callable
 from collections import Counter
 import random
 import numpy as np
-from sampler_abc import SamplerInternal
-from utility import compute_f_score
+from .sampler_abc import SamplerInternal
+from .utility import compute_f_score
 
 
 class StratifiedUniformSampler(SamplerInternal):

@@ -3,7 +3,7 @@ from typing import List
 from abc import ABC, abstractmethod
 import numpy as np
 
-from utility import is_between_zero_and_one
+from .utility import is_between_zero_and_one
 
 
 class SamplerInternal(ABC):

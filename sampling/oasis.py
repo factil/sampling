@@ -1,8 +1,8 @@
 import numpy as np
 
-from sampler_abc import SamplerInternal
-from stratification import Strata, stratify_by_cum_sqrt_f_method
-from utility import compute_f_score
+from .sampler_abc import SamplerInternal
+from .stratification import Strata, stratify_by_cum_sqrt_f_method
+from .utility import compute_f_score
 
 
 class BetaBernoulliModel:

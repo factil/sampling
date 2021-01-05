@@ -1,6 +1,6 @@
-from stratification import Strata
-from utility import equal_length
-from labelled_pairs import LabelledPairs
+from .stratification import Strata
+from .utility import equal_length
+from .labelled_pairs import LabelledPairs
 
 
 class Sampler:
